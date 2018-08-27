@@ -1,2 +1,2 @@
 # Sprinboard-Capstone
-Analysis of Kansas City, Missouri climate
+Analysis of Minnesota climate
