@@ -1,2 +1,2 @@
-# Sprinboard-capstone-KCMO-climate
+# Sprinboard-Capstone
 Analysis of Kansas City, Missouri climate
