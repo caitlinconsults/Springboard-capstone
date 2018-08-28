@@ -1,0 +1,48 @@
+Caitlin Davies
+Initial Capstone Proposal
+27th August 2018
+
+1. Hypothesis : Extreme changes in precipiation and tempurature affect and predict Minnesota agricultural output
+
+	Climate change is not changing the climate equally across the globe. Some locations are wetter on average; others are drier. Still others are experiencing extreme swings between both flooding and drought. Tempuratures are also rising everywhere. Any extreme in precipitation or tempurature will affect agricultural output. 
+
+	I predict that extremes in precipitation, both too much and not enough precipitation, will negatively affect agricultural output - and that precipitation can be used to predict future agricultural output.
+
+	Climate data for Minnesota will be gathered from the Midwestern Regional Climate Center;
+
+		http://mrcc.isws.illinois.edu/CLIMATE/ 
+
+	Agricultural data for Minnesota will be gathered from the United States Department of Agriculture;
+
+		https://quickstats.nass.usda.gov/
+
+
+	Project Goals
+		* Identify historical patterns of precipitation, tempurature and agricultural output in the state of Minnesota.
+		* Forecast agricultural output using precipitation and tempurature patterns in the state of Minnesota. 
+
+2. Hypothesis : 
+
+	For decades, Minnesota has been an epicenter of industrial agriculture. While the “green revolution”, a.k.a. Industrial agriculture, has fed billions, it does so by stripping the soil of vital microorganisms, putting farmers deeply in debt, and cheapening nutrition by providing calories without essential micronutrients.
+
+	https://www.ncdc.noaa.gov/cdo-web/datatools/findstation 
+
+	Project Goals
+		Identify historical patterns of agricultural sales in the state of Minnesota.
+		Forecast potential sales patterns in the state of Minnesota. 
+		
+
+3. History and Forecast of Minnesota Pesticide Use by County
+
+	Permaculture farms are susceptible to “pesticide drift,” which means that when other farmers use toxic pesticides, those chemicals are carried on the wind to other farms, which can kill more naturally-grown foods. Such “drift” can put an organic/permaculture farm out of commission for several years.
+
+		https://www.kaggle.com/usgs/pesticide-use 
+
+	Project Goals
+		Identify patterns of agricultural pesticide use by county in the state of Minnesota.
+
+Ensure that the problem statement is clear. 
+Ensure that the answer is useful. 
+Ensure that you have the right dataset to answer the problem statement.
+Ensure that the number of observations is decently high (10,000 - 100,000).
+
