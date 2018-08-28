@@ -1,4 +1,4 @@
-# Sprinboard Capstone
+# Springboard Capstone
 
 Springboard.com is an online, mentor-led, project-focused curriculum. 
 
