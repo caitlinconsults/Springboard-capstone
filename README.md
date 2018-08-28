@@ -21,3 +21,8 @@ The following assignments have been completed to meet the Capstone requirements;
 * Initial Capstone Proposals;
   * A brief description of 3 potential projects;
   * https://raw.githubusercontent.com/caitlinrdavies/Springboard-capstone/master/Initial%20Capstone%20Proposal.txt
+
+* Apply Data Wrangling to Capstone;
+ * Import and clean messy MRCC datasets; 
+ * https://github.com/caitlinrdavies/Springboard-capstone/blob/master/Import%20and%20Clean%20MRCC%20Datasets.R
+ 
