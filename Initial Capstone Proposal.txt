@@ -25,7 +25,7 @@ Initial Capstone Proposal
 
 
 
-2. HYPOTHESIS : US Counties can be categorized by likelihood of drought over time. 
+2. HYPOTHESIS : US Counties can be categorized by likelihood of drought over time
 
 	Droughts are a natural occurance, but they have been increasing in likelihood and severity over the last few decades. Counties have been historically categorized by severity of drought, but not likelihood. 
 
