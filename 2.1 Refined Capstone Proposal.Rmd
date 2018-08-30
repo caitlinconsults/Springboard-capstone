@@ -1,0 +1,42 @@
+---
+title: "Refined Capstone Proposal"
+author: "Caitlin Davies"
+date: "08/30/2018"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Defining the Problem
+
+The climate is changing, and it is changing unevenly across the globe. These changes affect farmers and gardeners in unique ways^[1](https://19january2017snapshot.epa.gov/climate-impacts/climate-impacts-agriculture-and-food-supply_.html)^, causing such questions as; 
+
+* How will temperatures change in my region?
+* Will water conditions shift, causing too much (flooding), or too little (drought)?
+* How will those changes affect harvests?
+* When should I sow seed? When should I harvest?
+
+In order to answer the questions above, we can measure the changes to temperature and precipitation, forecast future changes, and predict how those changes will affect agricultural harvests.
+
+## Defining the Client
+
+As of 2015, Minnesota ranked 5th in the United States for total agricultural production, 5th for crop production, and 8th for livestock production (measured in U.S. dollars). 51% of the state is farmland, divided into nearly 75,000 farms.^[2](https://www.mda.state.mn.us/~/media/Files/agprofile.ashx)^
+
+And Minnesota, as with all localities, is experiencing climate change.
+
+With the analysis provided in this capstone, Minnesotan farmers will be able to use data to proactively adapt to a changing climate.
+
+## Defining the Data
+
+Data will be obtained from; 
+
+* The Midwestern Regional Climate Center^[3](http://mrcc.isws.illinois.edu/CLIMATE/)^
+* The National Agricultural Statistics Service^[4](https://quickstats.nass.usda.gov/)^
+
+## Defining the Deliverables
+
+* Code
+* Paper
+* Slide Deck
