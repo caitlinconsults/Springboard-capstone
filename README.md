@@ -18,8 +18,7 @@ The Capstone project allows the student to work a problem end-to-end : Defining 
 
 The following assignments have been completed to meet the Capstone requirements; 
 
-* Initial Capstone Proposals;
-  * A brief description of 3 potential projects
-* Apply Data Wrangling to Capstone;
-  * Import and clean messy MRCC datasets
+* Initial Capstone Proposals : A brief description of 3 potential projects
+* Refined Capstone Proposal : A more in-depth proposal for a single project
+* Apply Data Wrangling to Capstone: Import and clean messy MRCC datasets
  
