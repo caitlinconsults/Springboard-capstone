@@ -1,0 +1,1230 @@
+---
+title: 'A Statistical Analysis of Climate in Minnesota'
+author: "Caitlin Davies"
+date: "8/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library("dplyr")
+library("tidyr")
+library("ggplot2")
+library("devtools")
+devtools::install_github("twitter/AnomalyDetection")
+library("AnomalyDetection")
+library("cluster")
+library("scatterplot3d")
+library("ggrepel")
+library("knitr")
+library("kableExtra")
+library("formattable")
+```
+
+```{r functions}
+
+## This function allows me to convert month/day to the # day of the year, so that data across years can be easily compared to each other.
+
+day_in_year <- function(m, d) {ifelse(m == 1, d,
+    ifelse(m == 2, 31 + d,
+    ifelse(m == 3, sum(31, 28) + d,
+    ifelse(m == 4, sum(31, 28, 31) + d,
+    ifelse(m == 5, sum(31, 28, 31, 30) + d,
+    ifelse(m == 6, sum(31, 28, 31, 30, 31) + d,
+    ifelse(m == 7, sum(31, 28, 31, 30, 31, 30) + d,
+    ifelse(m == 8, sum(31, 28, 31, 30, 31, 30, 31) + d,
+    ifelse(m == 9, sum(31, 28, 31, 30, 31, 30, 31, 31) + d,
+    ifelse(m == 10, sum(31, 28, 31, 30, 31, 30, 31, 31, 30) + d,
+    ifelse(m == 11, sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31) + d, 
+           sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30) + d)))))))))))}
+
+## This function allows me to group together winter tempuratures, so that data can be analyzed and visualized more easily.
+
+group_cold <- function(t) {ifelse(t > 300, (t - 365), t)}
+```
+
+```{r import}
+
+Stations <- read.csv(file = "MRCC Station Details.csv")
+ADA <- read.csv("ADA_clean.csv")
+AGASSIZ_REFUGE <- read.csv("AGASSIZ_REFUGE_clean.csv")
+ARGYLE <- read.csv("ARGYLE_clean.csv")
+BEMIDJI_MUNICIPAL_AP <- read.csv("BEMIDJI_MUNICIPAL_AP_clean.csv")
+LEECH_LAKE <- read.csv("LEECH_LAKE_clean.csv")
+POKEGAMA_DAM <- read.csv("POKEGAMA_DAM_clean.csv")
+GRAND_MARAIS <- read.csv("GRAND_MARAIS_clean.csv")
+DULUTH <- read.csv("DULUTH_clean.csv")
+TWO_HARBORS <- read.csv("TWO_HARBORS_clean.csv")
+ARTICHOKE_LAKE_1_E <- read.csv("ARTICHOKE_LAKE_1_E_clean.csv")
+BEARDSLEY <- read.csv("BEARDSLEY_clean.csv")
+AITKIN_2E <- read.csv("AITKIN_2E_clean.csv")
+ALBERT_LEA_3_SE <- read.csv("ALBERT_LEA_3_SE_clean.csv")
+AMBOY <- read.csv("AMBOY_clean.csv")
+
+```
+
+----
+
+## Climate Stations : Initial Description and Visualization
+
+----
+
+``` {r station_observations, message = FALSE}
+
+Stations.Observations.Count <- c(nrow(ADA), 
+                                 nrow(AGASSIZ_REFUGE), 
+                                 nrow(ARGYLE), 
+                                 nrow(BEMIDJI_MUNICIPAL_AP), 
+                                 nrow(LEECH_LAKE), 
+                                 nrow(POKEGAMA_DAM), 
+                                 nrow(GRAND_MARAIS), 
+                                 nrow(DULUTH), 
+                                 nrow(TWO_HARBORS), 
+                                 nrow(ARTICHOKE_LAKE_1_E), 
+                                 nrow(BEARDSLEY), 
+                                 nrow(AITKIN_2E), 
+                                 nrow(ALBERT_LEA_3_SE), 
+                                 nrow(AMBOY))
+
+Stations.Observations.Count.DF <- data.frame("Station.Name" = Stations$Station.Name, "Observations" =  Stations.Observations.Count)
+
+Stations <- inner_join(Stations, Stations.Observations.Count.DF)
+
+```
+
+### Description of Climate Stations
+
+The National Centers for Environmental Information ("NOAA") divides Minnesota into 9 Climate Divisions^[1](https://www.ncdc.noaa.gov/monitoring-references/maps/us-climate-divisions.php)^, starting with Climate Division 1 in the northwest, and ending with Climate Division 9 in the southeast.
+
+
+Using the Import and Clean MRCC Datasets R code^[2](https://github.com/caitlinrdavies/Springboard-capstone/blob/master/3.1.d%20Import%20and%20Clean%20MRCC%20Datasets.R)^, I have collected and cleaned `r nrow(Stations)` datasets from `r nrow(Stations)` random Climate Stations throughout Minnesota, listed below.
+
+Prior to import, some MRCC datasets contained some observations with no data, which have been removed.
+
+### List of Climate Stations
+
+``` {r station_table}
+
+Stations %>%
+  select(Station.Name, County, Climate.Division, Latitude, Longitude, Elevation, Observations) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+### Visualizing Climate Stations
+
+Climate Stations collected for this report can be visualized by Latitude and Longitude (with Climate Division represented by color):
+
+```{r stations_graph1}
+
+ggplot(Stations, aes(x = Longitude, y = Latitude, label = Station.Name)) +
+  geom_point(size = 3) +
+  geom_label_repel(fill = Stations$Climate.Division, segment.color = '#000000', fontface = 'bold', color = 'white')
+
+```
+
+And, with Elevation, the Climate Stations can be visualized in 3D:
+
+```{r}
+with(Stations, {s3d <- scatterplot3d(Longitude, Latitude, Elevation,
+                 color=Stations$Climate.Division, pch=19,
+                 type="h",
+                 xlab="Longitude",
+                 ylab="Latitude",
+                 zlab="Elevation")
+##   s3d.coords <- s3d$xyz.convert(Longitude, Latitude, Elevation)
+##   text(s3d.coords$x, s3d.coords$y,
+##         labels= Stations$Station.Name,
+##         cex=.75, pos = 4)
+})
+```
+
+### Visualizing the Collected Datasets
+
+The cleaned datasets, on average, contain `r format(mean(Stations$Observations), big.mark=",")` observations - but the average hides the wide variability in dataset size across Climate Division, as illustrated by this box and whiskers graph:
+
+```{r stations_boxplot}
+
+ggplot(Stations, aes(x = factor(Climate.Division), y = Observations)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "Climate Divisions", title = "Dataset Size, by Climate Division")
+
+```
+
+Moreover, the cleaned datasets comprise different timeframes:
+
+```{r station_years, message = FALSE}
+
+Stations.Observations.Year.Min <- c(min(ADA$Year), 
+                                 min(AGASSIZ_REFUGE$Year), 
+                                 min(ARGYLE$Year), 
+                                 min(BEMIDJI_MUNICIPAL_AP$Year), 
+                                 min(LEECH_LAKE$Year), 
+                                 min(POKEGAMA_DAM$Year), 
+                                 min(GRAND_MARAIS$Year), 
+                                 min(DULUTH$Year), 
+                                 min(TWO_HARBORS$Year), 
+                                 min(ARTICHOKE_LAKE_1_E$Year), 
+                                 min(BEARDSLEY$Year), 
+                                 min(AITKIN_2E$Year), 
+                                 min(ALBERT_LEA_3_SE$Year), 
+                                 min(AMBOY$Year))
+
+Stations.Observations.Year.Max <- c(max(ADA$Year), 
+                                 max(AGASSIZ_REFUGE$Year), 
+                                 max(ARGYLE$Year), 
+                                 max(BEMIDJI_MUNICIPAL_AP$Year), 
+                                 max(LEECH_LAKE$Year), 
+                                 max(POKEGAMA_DAM$Year), 
+                                 max(GRAND_MARAIS$Year), 
+                                 max(DULUTH$Year), 
+                                 max(TWO_HARBORS$Year), 
+                                 max(ARTICHOKE_LAKE_1_E$Year), 
+                                 max(BEARDSLEY$Year), 
+                                 max(AITKIN_2E$Year), 
+                                 max(ALBERT_LEA_3_SE$Year), 
+                                 max(AMBOY$Year))
+
+Stations.Observations.Min.Max.DF <- data.frame("Station.Name" = Stations$Station.Name, "Min.Year" =  Stations.Observations.Year.Min, "Max.Year" = Stations.Observations.Year.Max)
+
+Stations <- inner_join(Stations, Stations.Observations.Min.Max.DF)
+
+ggplot(Stations, aes(Station.Name)) +
+  geom_point(aes(y = Stations$Min.Year, color = "blue")) +
+  geom_point(aes(y = Stations$Max.Year, color = "red")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "", y = "", title = "Date Range of Collected Datasets") +
+  scale_color_manual(labels=c("First Year in Dataset", "Last Year in Dataset"), values = c("blue", "red")) +
+  theme(legend.position="top", legend.title=element_blank())
+
+```
+
+```{r station.clusters, eval = FALSE}
+
+Stations.cluster <- Stations[, c(4:6)]
+Stations.cluster <- scale(Stations.cluster)
+
+wssplot <- function(data, nc=6, seed=1234){
+	              wss <- (nrow(data)-1)*sum(apply(data,2,var))
+               	      for (i in 2:nc){
+		        set.seed(seed)
+	                wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+	                
+		      plot(1:nc, wss, type="b", xlab="Number of Clusters",
+	                        ylab="Within groups sum of squares")
+	   }
+
+wssplot(Stations.cluster)
+
+k = 6
+set.seed(1)
+fit.km <- kmeans(Stations.cluster, centers = k, iter.max = 1000)
+
+Stations.Results <- table(fit.km$cluster, Stations$Climate.Division)
+View(Stations.Results)
+
+clusplot(Stations.Results, clus = Stations.Results[2, ])
+
+```
+
+----
+
+## Visualizing Tempurature Extremes
+
+----
+
+For the analysis of tempurature extremes, partial years (which do not start on Jan. 1, and/or end on Dec. 31), are removed from the datasets.
+
+Partial years would erroneously skew the min, max, and trend of the data.
+
+```{r ADA}
+
+ADA.complete.years <- ADA %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+ADA.max <- ADA %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% ADA.complete.years$Year))
+
+ADA.max$Day_of_Year <- day_in_year(ADA.max$Month, ADA.max$Day)
+
+
+
+ADA.min <- ADA %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% ADA.complete.years$Year))
+
+ADA.min$Day_of_Year <- day_in_year(ADA.min$Month, ADA.min$Day)
+
+ADA.min$Day_of_Year <- group_cold(ADA.min$Day_of_Year)
+
+
+
+ADA.min_max <- as.data.frame(rbind(ADA.max, ADA.min))
+
+ADA.min_max <- ADA.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+ADA.min_max <- ADA.min_max[!is.na(ADA.min_max$Temp), ]
+
+ADA.min_max$Day_of_Year <- group_cold(ADA.min_max$Day_of_Year)
+
+```
+
+```{r AGASSIZ_REFUGE}
+
+AGASSIZ_REFUGE.complete.years <- AGASSIZ_REFUGE %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+AGASSIZ_REFUGE.max <- AGASSIZ_REFUGE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% AGASSIZ_REFUGE.complete.years$Year))
+
+AGASSIZ_REFUGE.max$Day_of_Year <- day_in_year(AGASSIZ_REFUGE.max$Month, AGASSIZ_REFUGE.max$Day)
+
+
+
+AGASSIZ_REFUGE.min <- AGASSIZ_REFUGE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% AGASSIZ_REFUGE.complete.years$Year))
+
+AGASSIZ_REFUGE.min$Day_of_Year <- day_in_year(AGASSIZ_REFUGE.min$Month, AGASSIZ_REFUGE.min$Day)
+
+AGASSIZ_REFUGE.min$Day_of_Year <- group_cold(AGASSIZ_REFUGE.min$Day_of_Year)
+
+
+
+AGASSIZ_REFUGE.min_max <- as.data.frame(rbind(AGASSIZ_REFUGE.max, AGASSIZ_REFUGE.min))
+
+AGASSIZ_REFUGE.min_max <- AGASSIZ_REFUGE.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+AGASSIZ_REFUGE.min_max <- AGASSIZ_REFUGE.min_max[!is.na(AGASSIZ_REFUGE.min_max$Temp), ]
+
+AGASSIZ_REFUGE.min_max$Day_of_Year <- group_cold(AGASSIZ_REFUGE.min_max$Day_of_Year)
+
+```
+
+```{r ARGYLE}
+
+ARGYLE.complete.years <- ARGYLE %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+ARGYLE.max <- ARGYLE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% ARGYLE.complete.years$Year))
+
+ARGYLE.max$Day_of_Year <- day_in_year(ARGYLE.max$Month, ARGYLE.max$Day)
+
+
+
+ARGYLE.min <- ARGYLE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% ARGYLE.complete.years$Year))
+
+ARGYLE.min$Day_of_Year <- day_in_year(ARGYLE.min$Month, ARGYLE.min$Day)
+
+ARGYLE.min$Day_of_Year <- group_cold(ARGYLE.min$Day_of_Year)
+
+
+
+ARGYLE.min_max <- as.data.frame(rbind(ARGYLE.max, ARGYLE.min))
+
+ARGYLE.min_max <- ARGYLE.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+ARGYLE.min_max <- ARGYLE.min_max[!is.na(ARGYLE.min_max$Temp), ]
+
+ARGYLE.min_max$Day_of_Year <- group_cold(ARGYLE.min_max$Day_of_Year)
+
+```
+
+```{r BEMIDJI_MUNICIPAL_AP}
+
+BEMIDJI_MUNICIPAL_AP.complete.years <- BEMIDJI_MUNICIPAL_AP %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+BEMIDJI_MUNICIPAL_AP.max <- BEMIDJI_MUNICIPAL_AP %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% BEMIDJI_MUNICIPAL_AP.complete.years$Year))
+
+BEMIDJI_MUNICIPAL_AP.max$Day_of_Year <- day_in_year(BEMIDJI_MUNICIPAL_AP.max$Month, BEMIDJI_MUNICIPAL_AP.max$Day)
+
+
+
+BEMIDJI_MUNICIPAL_AP.min <- BEMIDJI_MUNICIPAL_AP %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% BEMIDJI_MUNICIPAL_AP.complete.years$Year))
+
+BEMIDJI_MUNICIPAL_AP.min$Day_of_Year <- day_in_year(BEMIDJI_MUNICIPAL_AP.min$Month, BEMIDJI_MUNICIPAL_AP.min$Day)
+
+BEMIDJI_MUNICIPAL_AP.min$Day_of_Year <- group_cold(BEMIDJI_MUNICIPAL_AP.min$Day_of_Year)
+
+
+
+BEMIDJI_MUNICIPAL_AP.min_max <- as.data.frame(rbind(BEMIDJI_MUNICIPAL_AP.max, BEMIDJI_MUNICIPAL_AP.min))
+
+BEMIDJI_MUNICIPAL_AP.min_max <- BEMIDJI_MUNICIPAL_AP.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+BEMIDJI_MUNICIPAL_AP.min_max <- BEMIDJI_MUNICIPAL_AP.min_max[!is.na(BEMIDJI_MUNICIPAL_AP.min_max$Temp), ]
+
+BEMIDJI_MUNICIPAL_AP.min_max$Day_of_Year <- group_cold(BEMIDJI_MUNICIPAL_AP.min_max$Day_of_Year)
+
+```
+
+```{r LEECH_LAKE}
+
+LEECH_LAKE.complete.years <- LEECH_LAKE %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+LEECH_LAKE.max <- LEECH_LAKE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% LEECH_LAKE.complete.years$Year))
+
+LEECH_LAKE.max$Day_of_Year <- day_in_year(LEECH_LAKE.max$Month, LEECH_LAKE.max$Day)
+
+
+
+LEECH_LAKE.min <- LEECH_LAKE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% LEECH_LAKE.complete.years$Year))
+
+LEECH_LAKE.min$Day_of_Year <- day_in_year(LEECH_LAKE.min$Month, LEECH_LAKE.min$Day)
+
+LEECH_LAKE.min$Day_of_Year <- group_cold(LEECH_LAKE.min$Day_of_Year)
+
+
+
+LEECH_LAKE.min_max <- as.data.frame(rbind(LEECH_LAKE.max, LEECH_LAKE.min))
+
+LEECH_LAKE.min_max <- LEECH_LAKE.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+LEECH_LAKE.min_max <- LEECH_LAKE.min_max[!is.na(LEECH_LAKE.min_max$Temp), ]
+
+LEECH_LAKE.min_max$Day_of_Year <- group_cold(LEECH_LAKE.min_max$Day_of_Year)
+
+```
+
+```{r POKEGAMA_DAM}
+
+POKEGAMA_DAM.complete.years <- POKEGAMA_DAM %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+POKEGAMA_DAM.max <- POKEGAMA_DAM %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% POKEGAMA_DAM.complete.years$Year))
+
+POKEGAMA_DAM.max$Day_of_Year <- day_in_year(POKEGAMA_DAM.max$Month, POKEGAMA_DAM.max$Day)
+
+
+
+POKEGAMA_DAM.min <- POKEGAMA_DAM %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% POKEGAMA_DAM.complete.years$Year))
+
+POKEGAMA_DAM.min$Day_of_Year <- day_in_year(POKEGAMA_DAM.min$Month, POKEGAMA_DAM.min$Day)
+
+POKEGAMA_DAM.min$Day_of_Year <- group_cold(POKEGAMA_DAM.min$Day_of_Year)
+
+
+
+POKEGAMA_DAM.min_max <- as.data.frame(rbind(POKEGAMA_DAM.max, POKEGAMA_DAM.min))
+
+POKEGAMA_DAM.min_max <- POKEGAMA_DAM.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+POKEGAMA_DAM.min_max <- POKEGAMA_DAM.min_max[!is.na(POKEGAMA_DAM.min_max$Temp), ]
+
+POKEGAMA_DAM.min_max$Day_of_Year <- group_cold(POKEGAMA_DAM.min_max$Day_of_Year)
+
+```
+
+```{r GRAND_MARAIS}
+
+GRAND_MARAIS.complete.years <- GRAND_MARAIS %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+GRAND_MARAIS.max <- GRAND_MARAIS %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% GRAND_MARAIS.complete.years$Year))
+
+GRAND_MARAIS.max$Day_of_Year <- day_in_year(GRAND_MARAIS.max$Month, GRAND_MARAIS.max$Day)
+
+
+
+GRAND_MARAIS.min <- GRAND_MARAIS %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% GRAND_MARAIS.complete.years$Year))
+
+GRAND_MARAIS.min$Day_of_Year <- day_in_year(GRAND_MARAIS.min$Month, GRAND_MARAIS.min$Day)
+
+GRAND_MARAIS.min$Day_of_Year <- group_cold(GRAND_MARAIS.min$Day_of_Year)
+
+
+
+GRAND_MARAIS.min_max <- as.data.frame(rbind(GRAND_MARAIS.max, GRAND_MARAIS.min))
+
+GRAND_MARAIS.min_max <- GRAND_MARAIS.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+GRAND_MARAIS.min_max <- GRAND_MARAIS.min_max[!is.na(GRAND_MARAIS.min_max$Temp), ]
+
+GRAND_MARAIS.min_max$Day_of_Year <- group_cold(GRAND_MARAIS.min_max$Day_of_Year)
+
+```
+
+```{r DULUTH}
+
+DULUTH.complete.years <- DULUTH %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+DULUTH.max <- DULUTH %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% DULUTH.complete.years$Year))
+
+DULUTH.max$Day_of_Year <- day_in_year(DULUTH.max$Month, DULUTH.max$Day)
+
+
+
+DULUTH.min <- DULUTH %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% DULUTH.complete.years$Year))
+
+DULUTH.min$Day_of_Year <- day_in_year(DULUTH.min$Month, DULUTH.min$Day)
+
+DULUTH.min$Day_of_Year <- group_cold(DULUTH.min$Day_of_Year)
+
+
+
+DULUTH.min_max <- as.data.frame(rbind(DULUTH.max, DULUTH.min))
+
+DULUTH.min_max <- DULUTH.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+DULUTH.min_max <- DULUTH.min_max[!is.na(DULUTH.min_max$Temp), ]
+
+DULUTH.min_max$Day_of_Year <- group_cold(DULUTH.min_max$Day_of_Year)
+
+```
+
+```{r TWO_HARBORS}
+
+TWO_HARBORS.complete.years <- TWO_HARBORS %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+TWO_HARBORS.max <- TWO_HARBORS %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% TWO_HARBORS.complete.years$Year))
+
+TWO_HARBORS.max$Day_of_Year <- day_in_year(TWO_HARBORS.max$Month, TWO_HARBORS.max$Day)
+
+
+
+TWO_HARBORS.min <- TWO_HARBORS %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% TWO_HARBORS.complete.years$Year))
+
+TWO_HARBORS.min$Day_of_Year <- day_in_year(TWO_HARBORS.min$Month, TWO_HARBORS.min$Day)
+
+TWO_HARBORS.min$Day_of_Year <- group_cold(TWO_HARBORS.min$Day_of_Year)
+
+
+
+TWO_HARBORS.min_max <- as.data.frame(rbind(TWO_HARBORS.max, TWO_HARBORS.min))
+
+TWO_HARBORS.min_max <- TWO_HARBORS.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+TWO_HARBORS.min_max <- TWO_HARBORS.min_max[!is.na(TWO_HARBORS.min_max$Temp), ]
+
+TWO_HARBORS.min_max$Day_of_Year <- group_cold(TWO_HARBORS.min_max$Day_of_Year)
+
+```
+
+```{r ARTICHOKE_LAKE_1_E}
+
+ARTICHOKE_LAKE_1_E.complete.years <- ARTICHOKE_LAKE_1_E %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+ARTICHOKE_LAKE_1_E.max <- ARTICHOKE_LAKE_1_E %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% ARTICHOKE_LAKE_1_E.complete.years$Year))
+
+ARTICHOKE_LAKE_1_E.max$Day_of_Year <- day_in_year(ARTICHOKE_LAKE_1_E.max$Month, ARTICHOKE_LAKE_1_E.max$Day)
+
+
+
+ARTICHOKE_LAKE_1_E.min <- ARTICHOKE_LAKE_1_E %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% ARTICHOKE_LAKE_1_E.complete.years$Year))
+
+ARTICHOKE_LAKE_1_E.min$Day_of_Year <- day_in_year(ARTICHOKE_LAKE_1_E.min$Month, ARTICHOKE_LAKE_1_E.min$Day)
+
+ARTICHOKE_LAKE_1_E.min$Day_of_Year <- group_cold(ARTICHOKE_LAKE_1_E.min$Day_of_Year)
+
+
+
+ARTICHOKE_LAKE_1_E.min_max <- as.data.frame(rbind(ARTICHOKE_LAKE_1_E.max, ARTICHOKE_LAKE_1_E.min))
+
+ARTICHOKE_LAKE_1_E.min_max <- ARTICHOKE_LAKE_1_E.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+ARTICHOKE_LAKE_1_E.min_max <- ARTICHOKE_LAKE_1_E.min_max[!is.na(ARTICHOKE_LAKE_1_E.min_max$Temp), ]
+
+ARTICHOKE_LAKE_1_E.min_max$Day_of_Year <- group_cold(ARTICHOKE_LAKE_1_E.min_max$Day_of_Year)
+
+```
+
+```{r BEARDSLEY}
+
+BEARDSLEY.complete.years <- BEARDSLEY %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+BEARDSLEY.max <- BEARDSLEY %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% BEARDSLEY.complete.years$Year))
+
+BEARDSLEY.max$Day_of_Year <- day_in_year(BEARDSLEY.max$Month, BEARDSLEY.max$Day)
+
+
+
+BEARDSLEY.min <- BEARDSLEY %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% BEARDSLEY.complete.years$Year))
+
+BEARDSLEY.min$Day_of_Year <- day_in_year(BEARDSLEY.min$Month, BEARDSLEY.min$Day)
+
+BEARDSLEY.min$Day_of_Year <- group_cold(BEARDSLEY.min$Day_of_Year)
+
+
+
+BEARDSLEY.min_max <- as.data.frame(rbind(BEARDSLEY.max, BEARDSLEY.min))
+
+BEARDSLEY.min_max <- BEARDSLEY.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+BEARDSLEY.min_max <- BEARDSLEY.min_max[!is.na(BEARDSLEY.min_max$Temp), ]
+
+BEARDSLEY.min_max$Day_of_Year <- group_cold(BEARDSLEY.min_max$Day_of_Year)
+
+```
+
+```{r AITKIN_2E}
+
+AITKIN_2E.complete.years <- AITKIN_2E %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+AITKIN_2E.max <- AITKIN_2E %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% AITKIN_2E.complete.years$Year))
+
+AITKIN_2E.max$Day_of_Year <- day_in_year(AITKIN_2E.max$Month, AITKIN_2E.max$Day)
+
+
+
+AITKIN_2E.min <- AITKIN_2E %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% AITKIN_2E.complete.years$Year))
+
+AITKIN_2E.min$Day_of_Year <- day_in_year(AITKIN_2E.min$Month, AITKIN_2E.min$Day)
+
+AITKIN_2E.min$Day_of_Year <- group_cold(AITKIN_2E.min$Day_of_Year)
+
+
+
+AITKIN_2E.min_max <- as.data.frame(rbind(AITKIN_2E.max, AITKIN_2E.min))
+
+AITKIN_2E.min_max <- AITKIN_2E.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+AITKIN_2E.min_max <- AITKIN_2E.min_max[!is.na(AITKIN_2E.min_max$Temp), ]
+
+AITKIN_2E.min_max$Day_of_Year <- group_cold(AITKIN_2E.min_max$Day_of_Year)
+
+```
+
+```{r ALBERT_LEA_3_SE}
+
+ALBERT_LEA_3_SE.complete.years <- ALBERT_LEA_3_SE %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+ALBERT_LEA_3_SE.max <- ALBERT_LEA_3_SE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% ALBERT_LEA_3_SE.complete.years$Year))
+
+ALBERT_LEA_3_SE.max$Day_of_Year <- day_in_year(ALBERT_LEA_3_SE.max$Month, ALBERT_LEA_3_SE.max$Day)
+
+
+
+ALBERT_LEA_3_SE.min <- ALBERT_LEA_3_SE %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% ALBERT_LEA_3_SE.complete.years$Year))
+
+ALBERT_LEA_3_SE.min$Day_of_Year <- day_in_year(ALBERT_LEA_3_SE.min$Month, ALBERT_LEA_3_SE.min$Day)
+
+ALBERT_LEA_3_SE.min$Day_of_Year <- group_cold(ALBERT_LEA_3_SE.min$Day_of_Year)
+
+
+
+ALBERT_LEA_3_SE.min_max <- as.data.frame(rbind(ALBERT_LEA_3_SE.max, ALBERT_LEA_3_SE.min))
+
+ALBERT_LEA_3_SE.min_max <- ALBERT_LEA_3_SE.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+ALBERT_LEA_3_SE.min_max <- ALBERT_LEA_3_SE.min_max[!is.na(ALBERT_LEA_3_SE.min_max$Temp), ]
+
+ALBERT_LEA_3_SE.min_max$Day_of_Year <- group_cold(ALBERT_LEA_3_SE.min_max$Day_of_Year)
+
+```
+
+```{r AMBOY}
+
+AMBOY.complete.years <- AMBOY %>% 
+  select(Year, Month, Day) %>%
+  group_by(Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+AMBOY.max <- AMBOY %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMAX) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  filter((Year %in% AMBOY.complete.years$Year))
+
+AMBOY.max$Day_of_Year <- day_in_year(AMBOY.max$Month, AMBOY.max$Day)
+
+
+
+AMBOY.min <- AMBOY %>% 
+  group_by(Year) %>%
+  select(Year, Month, Day, TMIN) %>%
+  filter(min_rank(TMIN) <= 1) %>%
+  filter((Year %in% AMBOY.complete.years$Year))
+
+AMBOY.min$Day_of_Year <- day_in_year(AMBOY.min$Month, AMBOY.min$Day)
+
+AMBOY.min$Day_of_Year <- group_cold(AMBOY.min$Day_of_Year)
+
+
+
+AMBOY.min_max <- as.data.frame(rbind(AMBOY.max, AMBOY.min))
+
+AMBOY.min_max <- AMBOY.min_max %>%
+  gather(Extreme, Temp, c(TMAX, TMIN))
+
+AMBOY.min_max <- AMBOY.min_max[!is.na(AMBOY.min_max$Temp), ]
+
+AMBOY.min_max$Day_of_Year <- group_cold(AMBOY.min_max$Day_of_Year)
+
+```
+
+----
+
+### The Highest Tempurature of the Year
+
+The highest tempurature of the year, across the 14 Climate Stations, is typically banded between 83 degrees and 105 degrees.
+
+Outliers as low as 61 degrees, and as high as 115 degrees, are observed:
+
+```{r max_combined_temp}
+
+Max.combined <- full_join(ADA.max, AGASSIZ_REFUGE.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[4] <- "ADA.max"
+
+colnames(Max.combined)[6] <- "AGASSIZ_REFUGE.max"
+
+Max.combined <- full_join(Max.combined, ARGYLE.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[7] <- "ARGYLE.max"
+
+Max.combined <- full_join(Max.combined, BEMIDJI_MUNICIPAL_AP.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[8] <- "BEMIDJI_MUNICIPAL_AP.max"
+
+Max.combined <- full_join(Max.combined, LEECH_LAKE.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[9] <- "LEECH_LAKE.max"
+
+Max.combined <- full_join(Max.combined, POKEGAMA_DAM.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[10] <- "POKEGAMA_DAM.max"
+
+Max.combined <- full_join(Max.combined, GRAND_MARAIS.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[11] <- "GRAND_MARAIS.max"
+
+Max.combined <- full_join(Max.combined, DULUTH.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[12] <- "DULUTH.max"
+
+Max.combined <- full_join(Max.combined, TWO_HARBORS.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[13] <- "TWO_HARBORS.max"
+
+Max.combined <- full_join(Max.combined, ARTICHOKE_LAKE_1_E.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[14] <- "ARTICHOKE_LAKE_1_E.max"
+
+Max.combined <- full_join(Max.combined, BEARDSLEY.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[15] <- "BEARDSLEY.max"
+
+Max.combined <- full_join(Max.combined, AITKIN_2E.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[16] <- "AITKIN_2E.max"
+
+Max.combined <- full_join(Max.combined, ALBERT_LEA_3_SE.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[17] <- "ALBERT_LEA_3_SE.max"
+
+Max.combined <- full_join(Max.combined, AMBOY.max, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Max.combined)[18] <- "AMBOY.max"
+
+Max.combined <- gather(Max.combined, key = "TMAX.key", value = "TMAX.combined", ADA.max, AGASSIZ_REFUGE.max, ARGYLE.max, BEMIDJI_MUNICIPAL_AP.max, LEECH_LAKE.max, POKEGAMA_DAM.max, GRAND_MARAIS.max, DULUTH.max, TWO_HARBORS.max, ARTICHOKE_LAKE_1_E.max, BEARDSLEY.max, AITKIN_2E.max, ALBERT_LEA_3_SE.max, AMBOY.max, na.rm = TRUE)
+
+```
+
+```{r max_combined_temp_boxplot}
+
+ggplot(Max.combined, aes(x = TMAX.key, y = TMAX.combined)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Max Tempurature", title = "Spread of Maximum Tempurature Per Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+The highest tempurature of the year, on average, has a negative linear relationship with time (average Correlation Coefficiant of `r cor(Max.combined$Year, Max.combined$TMAX.combined)`).
+
+The exception is AGASSIZ_REFUGE, which shows a steep non-linear drop starting in 2007.
+
+Notably, AGASSIZ_REFUGE consistently collected climate data from 1958 to 2007, at which point some years are missing, supporting the hypothesis that the data collected after 2007 could be wrong.
+
+Additionally, the AMBOY dataset has a large gap from 1906 to 1992, leading to a large confidence band between those dates.
+
+```{r max_combined_temp_trend1}
+
+ggplot(Max.combined, aes(x = Year, y = TMAX.combined, color = TMAX.key)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("TMAX.key") +
+  theme(legend.position='none')
+```
+
+There is a negative correlation between time and tempurature for the majority of the datasets, indicating that the highest tempurature is trending downward over time:
+
+```{r correlation_coefficient}
+
+Max.combined %>%
+  group_by(TMAX.key) %>%
+  summarise(Corr.Coeff = cor(Year, TMAX.combined)) %>%
+  mutate(Strength = ifelse(Corr.Coeff <= -.3, "Strong Negative", 
+                    ifelse(Corr.Coeff > -.3 & Corr.Coeff < -0.05, "Weak Negative",
+                    ifelse(Corr.Coeff > -0.05 & Corr.Coeff < 0.05, "No Correlation", 
+                    ifelse(Corr.Coeff > 0.05 & Corr.Coeff < 0.3, "Weak Positive", "Strong Positive"))))) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  group_rows("Row 1", 1, 4) %>%
+  group_rows("Row 2", 5, 8) %>%
+  group_rows("Row 3", 9, 12) %>%
+  group_rows("Row 4", 13, 14)
+
+```
+
+```{r max_combined_temp_trend2, eval = FALSE}
+
+## In order to improve readability of these graphs , the years of 1905 and 1906 have been removed from the AMBOY dataset:
+
+Max.combined <- subset(Max.combined, !(Max.combined$TMAX.key == "AMBOY.max" & Max.combined$Year == "1905"))
+
+Max.combined <- subset(Max.combined, !(Max.combined$TMAX.key == "AMBOY.max" & Max.combined$Year == "1906"))
+
+ggplot(Max.combined, aes(x = Year, y = TMAX.combined, color = TMAX.key)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("TMAX.key") +
+  theme(legend.position='none')
+
+```
+
+### The Hottest Day of the Year
+
+The hottest day of the year typically occurs between June 12th and August 18th.
+
+Outliers as early as March 12th, and as late as October 20th, are observed:
+
+```{r max_combined_year_boxplot}
+
+ggplot(Max.combined, aes(x = TMAX.key, y = Day_of_Year)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Hottest Day of the Year", title = "Visual of the Spread of Hottest Day of the Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r max_combined_year_trend}
+
+ggplot(Max.combined, aes(x = Year, y = Day_of_Year, color = TMAX.key)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("TMAX.key") +
+  theme(legend.position='none')
+
+```
+
+```{r correlation_coefficient2}
+
+Max.combined %>%
+  group_by(TMAX.key) %>%
+  summarise(Corr.Coeff = cor(Year, Day_of_Year)) %>%
+  mutate(Strength = ifelse(Corr.Coeff <= -.3, "Strong Negative", 
+                    ifelse(Corr.Coeff > -.3 & Corr.Coeff < -0.05, "Weak Negative",
+                    ifelse(Corr.Coeff > -0.05 & Corr.Coeff < 0.05, "No Correlation", 
+                    ifelse(Corr.Coeff > 0.05 & Corr.Coeff < 0.3, "Weak Positive", "Strong Positive"))))) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE) %>%
+  group_rows("Row 1", 1, 4) %>%
+  group_rows("Row 2", 5, 8) %>%
+  group_rows("Row 3", 9, 12) %>%
+  group_rows("Row 4", 13, 14)
+
+```
+
+### The Lowest Tempurature of the Year
+
+```{r min_combined_temp}
+
+Min.combined <- full_join(ADA.min, AGASSIZ_REFUGE.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[4] <- "ADA.min"
+
+colnames(Min.combined)[6] <- "AGASSIZ_REFUGE.min"
+
+Min.combined <- full_join(Min.combined, ARGYLE.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[7] <- "ARGYLE.min"
+
+Min.combined <- full_join(Min.combined, BEMIDJI_MUNICIPAL_AP.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[8] <- "BEMIDJI_MUNICIPAL_AP.min"
+
+Min.combined <- full_join(Min.combined, LEECH_LAKE.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[9] <- "LEECH_LAKE.min"
+
+Min.combined <- full_join(Min.combined, POKEGAMA_DAM.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[10] <- "POKEGAMA_DAM.min"
+
+Min.combined <- full_join(Min.combined, GRAND_MARAIS.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[11] <- "GRAND_MARAIS.min"
+
+Min.combined <- full_join(Min.combined, DULUTH.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[12] <- "DULUTH.min"
+
+Min.combined <- full_join(Min.combined, TWO_HARBORS.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[13] <- "TWO_HARBORS.min"
+
+Min.combined <- full_join(Min.combined, ARTICHOKE_LAKE_1_E.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[14] <- "ARTICHOKE_LAKE_1_E.min"
+
+Min.combined <- full_join(Min.combined, BEARDSLEY.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[15] <- "BEARDSLEY.min"
+
+Min.combined <- full_join(Min.combined, AITKIN_2E.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[16] <- "AITKIN_2E.min"
+
+Min.combined <- full_join(Min.combined, ALBERT_LEA_3_SE.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[17] <- "ALBERT_LEA_3_SE.min"
+
+Min.combined <- full_join(Min.combined, AMBOY.min, by = c("Day_of_Year", "Year", "Month", "Day"))
+
+colnames(Min.combined)[18] <- "AMBOY.min"
+
+Min.combined <- gather(Min.combined, key = "TMIN.key", value = "TMIN.combined", ADA.min, AGASSIZ_REFUGE.min, ARGYLE.min, BEMIDJI_MUNICIPAL_AP.min, LEECH_LAKE.min, POKEGAMA_DAM.min, GRAND_MARAIS.min, DULUTH.min, TWO_HARBORS.min, ARTICHOKE_LAKE_1_E.min, BEARDSLEY.min, AITKIN_2E.min, ALBERT_LEA_3_SE.min, AMBOY.min, na.rm = TRUE)
+
+```
+
+The lowest tempurature of the year, throughout Minnesota, is typically banded between -40 degrees and -20 degrees.
+
+Outliers as low as -60 degrees, and as high as 0 degrees, are observed:
+
+```{r}
+
+ggplot(Min.combined, aes(x = TMIN.key, y = TMIN.combined)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Coldest Day of the Year", title = "Visual of the Spread of Coldest Day of the Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r}
+ggplot(Min.combined, aes(x = Year, y = TMIN.combined, color = TMIN.key)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("TMIN.key") +
+  theme(legend.position='none')
+
+```
+
+```{r min_combined_year}
+
+ggplot(Min.combined, aes(x = Year, y = Day_of_Year, color = TMIN.key)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("TMIN.key") +
+  theme(legend.position='none')
+
+```
+
+```{r charts, eval = FALSE}
+
+ADA.max.chart <- ggplot(ADA.max, aes(x = Year, y = Day_of_Year)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Hottest Day of the Year through Time", y = "Day of the Year") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ADA.min.chart <- ggplot(ADA.min, aes(x = Year, y = Day_of_Year)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Coldest Day of the Year through Time", y = "Day of the Year") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ADA.min_max.chart1 <- ggplot(ADA.min_max, aes(Year, Day_of_Year, color = Extreme)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Coldest and Hottest Days of the Year through Time", y = "Day of the Year") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ADA.min_max.chart2 <- ggplot(ADA.min_max, aes(Year, Temp, color = Extreme)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  labs(title = "Coldest and Hottest Temps of the Year through Time", y = "Tempurature") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(ADA.min.chart)
+
+print(ARGYLE.min.chart)
+
+print(TWO_HARBORS.min.chart)
+
+
+print(ADA.max.chart)
+
+print(ARGYLE.max.chart)
+
+print(TWO_HARBORS.max.chart)
+
+
+print(ADA.min_max.chart1)
+
+print(ARGYLE.min_max.chart1)
+
+print(TWO_HARBORS.min_max.chart1)
+
+
+print(ADA.min_max.chart2)
+
+print(ARGYLE.min_max.chart2)
+
+print(TWO_HARBORS.min_max.chart2)
+
+```
+
+```{r eval = FALSE}
+
+ARGYLE_model <- lm(TMIN ~ TMAX, data = ARGYLE)
+
+summary(ARGYLE_model)
+
+confint(ARGYLE_model)
+
+```
+
+```{r eval = FALSE}
+
+## This code isn't doing anything, perhaps because we don't have that many anomolies? 
+
+ADA.max.anomaly <- ADA[, c(1, 9)]
+
+ADA.max.anomaly <- ADA.max.anomaly[complete.cases(ADA.max.anomaly), ]
+
+ADA.max.anomaly1 <- AnomalyDetectionTs(ADA.max.anomaly, max_anoms = 0.02, direction = "both", plot = TRUE)
+ADA.max.anomaly1$plot
+
+```
