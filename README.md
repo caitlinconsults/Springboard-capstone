@@ -21,4 +21,4 @@ The following assignments have been completed to meet the Capstone requirements;
 * Initial Capstone Proposals : A brief description of 3 potential projects
 * Refined Capstone Proposal : A more in-depth proposal for a single project
 * Apply Data Wrangling to Capstone : Import and clean messy MRCC datasets
-* Statistica analysis of Capstone data : Description, count, mean, and correlation between data
+* Statistical Analysis of Capstone Data : Description, count, mean, and correlation between data
