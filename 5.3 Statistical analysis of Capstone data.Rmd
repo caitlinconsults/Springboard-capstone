@@ -1,0 +1,301 @@
+---
+title: 'A Statistical Analysis of Climate in Minnesota'
+author: "Caitlin Davies"
+date: "8/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library("dplyr")
+library("tidyr")
+library("devtools")
+library("ggplot2")
+devtools::install_github("twitter/AnomalyDetection")
+library("AnomalyDetection")
+library("cluster")
+library("scatterplot3d")
+library("ggrepel")
+library("knitr")
+library("kableExtra")
+library("formattable")
+```
+
+```{r import}
+
+Stations <- read.csv(file = "MRCC Station Details.csv")
+
+ADA <- read.csv("ADA_clean.csv")
+ADA <- cbind(Station.Name = "ADA", ADA)
+
+AGASSIZ_REFUGE <- read.csv("AGASSIZ_REFUGE_clean.csv")
+AGASSIZ_REFUGE <- cbind(Station.Name = "AGASSIZ REFUGE", AGASSIZ_REFUGE)
+
+ARGYLE <- read.csv("ARGYLE_clean.csv")
+ARGYLE <- cbind(Station.Name = "ARGYLE", ARGYLE)
+
+BEMIDJI_MUNICIPAL_AP <- read.csv("BEMIDJI_MUNICIPAL_AP_clean.csv")
+BEMIDJI_MUNICIPAL_AP <- cbind(Station.Name = "BEMIDJI MUNICIPAL AP", BEMIDJI_MUNICIPAL_AP)
+
+LEECH_LAKE <- read.csv("LEECH_LAKE_clean.csv")
+LEECH_LAKE <- cbind(Station.Name = "LEECH LAKE", LEECH_LAKE)
+
+POKEGAMA_DAM <- read.csv("POKEGAMA_DAM_clean.csv")
+POKEGAMA_DAM <- cbind(Station.Name = "POKEGAMA DAM", POKEGAMA_DAM)
+
+GRAND_MARAIS <- read.csv("GRAND_MARAIS_clean.csv")
+GRAND_MARAIS <- cbind(Station.Name = "GRAND MARAIS", GRAND_MARAIS)
+
+DULUTH <- read.csv("DULUTH_clean.csv")
+DULUTH <- cbind(Station.Name = "DULUTH", DULUTH)
+
+TWO_HARBORS <- read.csv("TWO_HARBORS_clean.csv")
+TWO_HARBORS <- cbind(Station.Name = "TWO HARBORS", TWO_HARBORS)
+
+ARTICHOKE_LAKE_1_E <- read.csv("ARTICHOKE_LAKE_1_E_clean.csv")
+ARTICHOKE_LAKE_1_E <- cbind(Station.Name = "ARTICHOKE LAKE 1 E", ARTICHOKE_LAKE_1_E)
+
+BEARDSLEY <- read.csv("BEARDSLEY_clean.csv")
+BEARDSLEY <- cbind(Station.Name = "BEARDSLEY", BEARDSLEY)
+
+AITKIN_2E <- read.csv("AITKIN_2E_clean.csv")
+AITKIN_2E <- cbind(Station.Name = "AITKIN 2E", AITKIN_2E)
+
+ALBERT_LEA_3_SE <- read.csv("ALBERT_LEA_3_SE_clean.csv")
+ALBERT_LEA_3_SE <- cbind(Station.Name = "ALBERT LEA 3 SE", ALBERT_LEA_3_SE)
+
+AMBOY <- read.csv("AMBOY_clean.csv")
+AMBOY <- cbind(Station.Name = "AMBOY", AMBOY)
+
+All_Stations <- rbind(ADA, AGASSIZ_REFUGE, ARGYLE, BEMIDJI_MUNICIPAL_AP, LEECH_LAKE, POKEGAMA_DAM, GRAND_MARAIS, DULUTH, TWO_HARBORS, ARTICHOKE_LAKE_1_E, BEARDSLEY, AITKIN_2E, ALBERT_LEA_3_SE, AMBOY)
+
+```
+
+```{r functions}
+
+## This function allows me to convert month/day to the # day of the year, so that data across years can be easily compared to each other.
+
+day_in_year <- function(m, d) {ifelse(m == 1, d,
+    ifelse(m == 2, 31 + d,
+    ifelse(m == 3, sum(31, 28) + d,
+    ifelse(m == 4, sum(31, 28, 31) + d,
+    ifelse(m == 5, sum(31, 28, 31, 30) + d,
+    ifelse(m == 6, sum(31, 28, 31, 30, 31) + d,
+    ifelse(m == 7, sum(31, 28, 31, 30, 31, 30) + d,
+    ifelse(m == 8, sum(31, 28, 31, 30, 31, 30, 31) + d,
+    ifelse(m == 9, sum(31, 28, 31, 30, 31, 30, 31, 31) + d,
+    ifelse(m == 10, sum(31, 28, 31, 30, 31, 30, 31, 31, 30) + d,
+    ifelse(m == 11, sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31) + d, 
+           sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30) + d)))))))))))}
+
+## This function allows me to group together winter tempuratures, so that data can be analyzed and visualized more easily.
+
+group_cold <- function(t) {ifelse(t > 300, (t - 365), t)}
+```
+
+``` {r station_observations, message = FALSE}
+
+Stations.Observations.Count <- All_Stations %>%
+  group_by(Station.Name) %>%
+  summarise(Observation.Count = n(),
+            Min.Year = min(Year),
+            Max.Year = max(Year))
+
+Stations <- inner_join(Stations, Stations.Observations.Count)
+
+```
+
+### Size and Completeness of Collected Datasets
+
+An imported dataset, on average, contains **`r format(mean(Stations$Observation.Count), big.mark=",")`** observations. This average hides a wide variability in dataset size:
+
+```{r stations_boxplot, fig.width = 10}
+
+ggplot(Stations, aes(x = factor(Climate.Division), y = Observation.Count)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "Climate Divisions", y = "Count of Observations", title = "Distribution of Dataset Size across Climate Division")
+
+```
+
+```{r Min_Max_Temp}
+
+complete.years <- All_Stations %>% 
+  select(Station.Name, Year, Month, Day) %>%
+  group_by(Station.Name, Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+Max.Tempurature <- All_Stations %>%
+  select(Station.Name, Year, Month, Day, TMAX) %>%
+  group_by(Station.Name, Year) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  slice(which.max(TMAX)) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+Max.Tempurature$Day_of_Year <- day_in_year(Max.Tempurature$Month, Max.Tempurature$Day)
+
+Min.Tempurature <- All_Stations %>%
+  select(Station.Name, Year, Month, Day, TMIN) %>%
+  group_by(Station.Name, Year) %>%
+  slice(which.min(TMIN)) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+Min.Tempurature$Day_of_Year <- day_in_year(Min.Tempurature$Month, Min.Tempurature$Day)
+
+# Min.Tempurature$Day_of_Year <- group_cold(Min.Tempurature$Day_of_Year)
+
+Min.Max.Tempurature <- full_join(Min.Tempurature, Max.Tempurature, by = c("Station.Name", "Year", "Month", "Day", "Day_of_Year"))
+
+Min.Max.Tempurature <- Min.Max.Tempurature %>%
+  gather(Extreme, Temp, c(TMIN, TMAX))
+
+```
+
+Some of those observations occur in partial years. (I.e., the data collected for some years does not begin on January 1st, does not end on December 31st, and/or is missing data from the middle of the year.)
+
+```{r partial_years}
+
+All_Stations_Complete_Years_Count <- All_Stations %>% 
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+All_Stations_Complete_Years_Count <- All_Stations_Complete_Years_Count %>%
+  select(Station.Name) %>%
+  group_by(Station.Name) %>%
+  summarise(Count = n())
+
+All_Stations_Count <- All_Stations %>%
+  select(Station.Name) %>%
+  group_by(Station.Name) %>%
+  summarise(Count = n())
+
+All_Stations_Count_Both <- full_join(All_Stations_Count, All_Stations_Complete_Years_Count, by = "Station.Name")
+
+colnames(All_Stations_Count_Both)[2] <- "All_Years"
+
+colnames(All_Stations_Count_Both)[3] <- "Full_Years"
+
+All_Stations_Count_Both$Difference <- All_Stations_Count_Both$All_Years - All_Stations_Count_Both$Full_Years
+
+All_Stations_Count_Both$All_Years <- NULL
+
+All_Stations_Count_Both <- gather(All_Stations_Count_Both, "Count_Type", "Count", Full_Years, Difference)
+
+```
+
+The imported datasets, on average, contain **`r format(mean(All_Stations_Count$Count), big.mark=",")`** observations from complete years, which is (on average) **`r percent(mean(All_Stations_Complete_Years_Count$Count) / mean(All_Stations_Count$Count))`** of the total observations. 
+
+```{r partial_years_graph, fig.width = 10}
+
+ggplot(All_Stations_Count_Both, aes(Station.Name, Count, fill = Count_Type)) +
+  geom_col() +
+  labs(x = "", y = "Observations", title = "Observations by Complete or Partial Year")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.title=element_blank()) +
+  scale_fill_discrete(labels=c("Partial Years", "Complete Years"))
+
+```
+
+Only data from complete years is used in this analysis.
+
+----
+
+## Observing Tempurature Extremes
+
+----
+
+### The Highest Tempurature of the Year
+
+The highest tempurature of the year, across the 14 Climate Stations, is typically banded between 83 degrees and 105 degrees.
+
+Outliers as low as 61 degrees, and as high as 115 degrees, are observed:
+
+```{r max_temp_boxplot, fig.width = 10}
+
+ggplot(Max.Tempurature, aes(x = Station.Name, y = TMAX)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Max Tempurature", title = "Spread of Maximum Tempurature Per Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+Days over 100 degrees have been observed throughout the datasets, often clustering together in observed heatwaves. A particularly large heatwave is observed between 1920 and 1950: 
+
+```{r count_over_100_degrees, fig.width = 10}
+
+Days_Over_100 <- All_Stations %>%
+  select(Station.Name, Year, Month, TMAX) %>%
+  group_by(Station.Name) %>%
+  filter(TMAX >=100) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+ggplot(Days_Over_100, aes(Year)) +
+  geom_bar() +
+  labs(y = "Count of Days Over 100 Degrees")
+
+```
+
+### The Hottest Day of the Year
+
+The hottest day of the year typically occurs between June 12th and August 18th.
+
+Outliers as early as March 12th, and as late as October 20th, are observed:
+
+```{r max_year_boxplot, fig.width = 10}
+
+ggplot(Max.Tempurature, aes(x = Station.Name, y = Day_of_Year)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Hottest Day of the Year", title = "Visual of the Spread of Hottest Day of the Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r max_year_trend, fig.width = 10}
+
+ggplot(Max.Tempurature, aes(x = Year, y = Day_of_Year, color = TMAX)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  theme(legend.position='none')
+
+```
+
+### The Lowest Tempurature of the Year
+
+The lowest tempurature of the year, throughout Minnesota, is typically banded between -40 degrees and -20 degrees.
+
+Outliers as low as -60 degrees, and as high as 0 degrees, are observed:
+
+```{r min_boxplot, fig.width = 10}
+
+ggplot(Min.Tempurature, aes(x = Station.Name, y = TMIN)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Coldest Day of the Year", title = "Visual of the Spread of Coldest Day of the Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r min_point, fig.width = 10}
+ggplot(Min.Tempurature, aes(x = Year, y = TMIN, color = Station.Name)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  theme(legend.position='none')
+
+```
+
+```{r min_year, fig.width = 10}
+
+ggplot(Min.Tempurature, aes(x = Year, y = Day_of_Year, color = Station.Name)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  theme(legend.position='none')
+
+```
