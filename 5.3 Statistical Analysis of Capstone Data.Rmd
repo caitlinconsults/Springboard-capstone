@@ -1,7 +1,7 @@
 ---
-title: 'A Statistical Analysis of Climate in Minnesota'
+title: 'A Statistical Analysis of Capstone Data'
 author: "Caitlin Davies"
-date: "8/30/2018"
+date: "9/7/2018"
 output: html_document
 ---
 
@@ -94,7 +94,7 @@ day_in_year <- function(m, d) {ifelse(m == 1, d,
 group_cold <- function(t) {ifelse(t > 300, (t - 365), t)}
 ```
 
-``` {r station_observations, message = FALSE}
+``` {r station_observations, warning = FALSE}
 
 Stations.Observations.Count <- All_Stations %>%
   group_by(Station.Name) %>%
@@ -102,13 +102,13 @@ Stations.Observations.Count <- All_Stations %>%
             Min.Year = min(Year),
             Max.Year = max(Year))
 
-Stations <- inner_join(Stations, Stations.Observations.Count)
+Stations <- inner_join(Stations, Stations.Observations.Count, by = "Station.Name")
 
 ```
 
 ### Size and Completeness of Collected Datasets
 
-An imported dataset, on average, contains **`r format(mean(Stations$Observation.Count), big.mark=",")`** observations. This average hides a wide variability in dataset size:
+An imported dataset, on average, contains **`r format(round(mean(Stations$Observation.Count), 0), big.mark=",")`** observations. This average hides a wide variability in dataset size:
 
 ```{r stations_boxplot, fig.width = 10}
 
@@ -148,7 +148,7 @@ Min.Tempurature <- All_Stations %>%
 
 Min.Tempurature$Day_of_Year <- day_in_year(Min.Tempurature$Month, Min.Tempurature$Day)
 
-# Min.Tempurature$Day_of_Year <- group_cold(Min.Tempurature$Day_of_Year)
+Min.Tempurature$Day_of_Year <- group_cold(Min.Tempurature$Day_of_Year)
 
 Min.Max.Tempurature <- full_join(Min.Tempurature, Max.Tempurature, by = c("Station.Name", "Year", "Month", "Day", "Day_of_Year"))
 
@@ -188,7 +188,7 @@ All_Stations_Count_Both <- gather(All_Stations_Count_Both, "Count_Type", "Count"
 
 ```
 
-The imported datasets, on average, contain **`r format(mean(All_Stations_Count$Count), big.mark=",")`** observations from complete years, which is (on average) **`r percent(mean(All_Stations_Complete_Years_Count$Count) / mean(All_Stations_Count$Count))`** of the total observations. 
+Complete years, on average, total **`r format(round(mean(All_Stations_Complete_Years_Count$Count), 0), big.mark=",")`** observations in each dataset, which is (on average) **`r percent(mean(All_Stations_Complete_Years_Count$Count) / mean(All_Stations_Count$Count))`** of the total observations. 
 
 ```{r partial_years_graph, fig.width = 10}
 
@@ -201,7 +201,7 @@ ggplot(All_Stations_Count_Both, aes(Station.Name, Count, fill = Count_Type)) +
 
 ```
 
-Only data from complete years is used in this analysis.
+Only data from complete years is used in this analysis going forward.
 
 ----
 
@@ -224,7 +224,7 @@ ggplot(Max.Tempurature, aes(x = Station.Name, y = TMAX)) +
 
 ```
 
-Days over 100 degrees have been observed throughout the datasets, often clustering together in observed heatwaves. A particularly large heatwave is observed between 1920 and 1950: 
+Days over 100 degrees have been observed throughout the datasets, often clustering together in observable heatwaves. A particularly large heatwave is observed between 1920 and 1950: 
 
 ```{r count_over_100_degrees, fig.width = 10}
 
@@ -255,16 +255,6 @@ ggplot(Max.Tempurature, aes(x = Station.Name, y = Day_of_Year)) +
 
 ```
 
-```{r max_year_trend, fig.width = 10}
-
-ggplot(Max.Tempurature, aes(x = Year, y = Day_of_Year, color = TMAX)) +
-  geom_point() +
-  geom_smooth(method = "loess", color = "black") +
-  facet_wrap("Station.Name") +
-  theme(legend.position='none')
-
-```
-
 ### The Lowest Tempurature of the Year
 
 The lowest tempurature of the year, throughout Minnesota, is typically banded between -40 degrees and -20 degrees.
@@ -280,22 +270,33 @@ ggplot(Min.Tempurature, aes(x = Station.Name, y = TMIN)) +
 
 ```
 
+Days under 0 degrees have been observed throughout the datasets:
 
-```{r min_point, fig.width = 10}
-ggplot(Min.Tempurature, aes(x = Year, y = TMIN, color = Station.Name)) +
-  geom_point() +
-  geom_smooth(method = "loess", color = "black") +
-  facet_wrap("Station.Name") +
-  theme(legend.position='none')
+```{r count_under_0_degrees, fig.width = 10}
+
+Days_Under_0 <- All_Stations %>%
+  select(Station.Name, Year, Month, TMIN) %>%
+  group_by(Station.Name) %>%
+  filter(TMIN <= 0) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+ggplot(Days_Under_0, aes(Year)) +
+  geom_bar() +
+  labs(y = "Count of Days Under 0 Degrees")
 
 ```
 
-```{r min_year, fig.width = 10}
+### The Coldest Day of the Year
 
-ggplot(Min.Tempurature, aes(x = Year, y = Day_of_Year, color = Station.Name)) +
-  geom_point() +
-  geom_smooth(method = "loess", color = "black") +
-  facet_wrap("Station.Name") +
-  theme(legend.position='none')
+The coldest day of the year typically occurs between _ and _.
+
+Outliers as early as _, and as late as _, are observed:
+
+```{r min_year_boxplot, fig.width = 10}
+
+ggplot(Min.Tempurature, aes(x = Station.Name, y = Day_of_Year)) +
+  geom_boxplot(fill = "#4271AE", alpha = 0.7) +
+  labs(x = "", y = "Coldest Day of the Year", title = "Visual of the Spread of Coldest Day of the Year") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ```
