@@ -1,0 +1,339 @@
+---
+title: "Capstone Data Story"
+author: "Caitlin Davies"
+date: "9/9/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library("dplyr")
+library("tidyr")
+library("devtools")
+library("ggplot2")
+devtools::install_github("twitter/AnomalyDetection")
+library("AnomalyDetection")
+library("cluster")
+library("scatterplot3d")
+library("ggrepel")
+library("knitr")
+library("kableExtra")
+library("formattable")
+```
+
+```{r import}
+
+Stations <- read.csv(file = "MRCC Station Details.csv")
+
+ADA <- read.csv("ADA_clean.csv")
+ADA <- cbind(Station.Name = "ADA", ADA)
+
+AGASSIZ_REFUGE <- read.csv("AGASSIZ_REFUGE_clean.csv")
+AGASSIZ_REFUGE <- cbind(Station.Name = "AGASSIZ REFUGE", AGASSIZ_REFUGE)
+
+ARGYLE <- read.csv("ARGYLE_clean.csv")
+ARGYLE <- cbind(Station.Name = "ARGYLE", ARGYLE)
+
+BEMIDJI_MUNICIPAL_AP <- read.csv("BEMIDJI_MUNICIPAL_AP_clean.csv")
+BEMIDJI_MUNICIPAL_AP <- cbind(Station.Name = "BEMIDJI MUNICIPAL AP", BEMIDJI_MUNICIPAL_AP)
+
+LEECH_LAKE <- read.csv("LEECH_LAKE_clean.csv")
+LEECH_LAKE <- cbind(Station.Name = "LEECH LAKE", LEECH_LAKE)
+
+POKEGAMA_DAM <- read.csv("POKEGAMA_DAM_clean.csv")
+POKEGAMA_DAM <- cbind(Station.Name = "POKEGAMA DAM", POKEGAMA_DAM)
+
+GRAND_MARAIS <- read.csv("GRAND_MARAIS_clean.csv")
+GRAND_MARAIS <- cbind(Station.Name = "GRAND MARAIS", GRAND_MARAIS)
+
+DULUTH <- read.csv("DULUTH_clean.csv")
+DULUTH <- cbind(Station.Name = "DULUTH", DULUTH)
+
+TWO_HARBORS <- read.csv("TWO_HARBORS_clean.csv")
+TWO_HARBORS <- cbind(Station.Name = "TWO HARBORS", TWO_HARBORS)
+
+ARTICHOKE_LAKE_1_E <- read.csv("ARTICHOKE_LAKE_1_E_clean.csv")
+ARTICHOKE_LAKE_1_E <- cbind(Station.Name = "ARTICHOKE LAKE 1 E", ARTICHOKE_LAKE_1_E)
+
+BEARDSLEY <- read.csv("BEARDSLEY_clean.csv")
+BEARDSLEY <- cbind(Station.Name = "BEARDSLEY", BEARDSLEY)
+
+AITKIN_2E <- read.csv("AITKIN_2E_clean.csv")
+AITKIN_2E <- cbind(Station.Name = "AITKIN 2E", AITKIN_2E)
+
+ALBERT_LEA_3_SE <- read.csv("ALBERT_LEA_3_SE_clean.csv")
+ALBERT_LEA_3_SE <- cbind(Station.Name = "ALBERT LEA 3 SE", ALBERT_LEA_3_SE)
+
+AMBOY <- read.csv("AMBOY_clean.csv")
+AMBOY <- cbind(Station.Name = "AMBOY", AMBOY)
+
+All_Stations <- rbind(ADA, AGASSIZ_REFUGE, ARGYLE, BEMIDJI_MUNICIPAL_AP, LEECH_LAKE, POKEGAMA_DAM, GRAND_MARAIS, DULUTH, TWO_HARBORS, ARTICHOKE_LAKE_1_E, BEARDSLEY, AITKIN_2E, ALBERT_LEA_3_SE, AMBOY)
+
+complete.years <- All_Stations %>% 
+  select(Station.Name, Year, Month, Day) %>%
+  group_by(Station.Name, Year) %>%
+  summarise(
+    First.Month = first(Month), 
+    First.Day = first(Day),
+    Last.Month = last(Month), 
+    Last.Day = last(Day)
+  ) %>%
+  filter(First.Month == 1 & First.Day == 1 & Last.Month == 12 & Last.Day == 31)
+
+```
+
+```{r functions}
+
+## This function allows me to convert month/day to the # day of the year, so that data across years can be easily compared to each other.
+
+day_in_year <- function(m, d) {ifelse(m == 1, d,
+    ifelse(m == 2, 31 + d,
+    ifelse(m == 3, sum(31, 28) + d,
+    ifelse(m == 4, sum(31, 28, 31) + d,
+    ifelse(m == 5, sum(31, 28, 31, 30) + d,
+    ifelse(m == 6, sum(31, 28, 31, 30, 31) + d,
+    ifelse(m == 7, sum(31, 28, 31, 30, 31, 30) + d,
+    ifelse(m == 8, sum(31, 28, 31, 30, 31, 30, 31) + d,
+    ifelse(m == 9, sum(31, 28, 31, 30, 31, 30, 31, 31) + d,
+    ifelse(m == 10, sum(31, 28, 31, 30, 31, 30, 31, 31, 30) + d,
+    ifelse(m == 11, sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31) + d, 
+           sum(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30) + d)))))))))))}
+
+## This function allows me to group together winter tempuratures, so that data can be analyzed and visualized more easily.
+
+group_cold <- function(t) {ifelse(t > 300, (t - 365), t)}
+```
+
+----
+
+## Climate Divisions of Minnesota
+
+----
+
+``` {r station_observations, warning = FALSE}
+
+Stations.Observations.Count <- All_Stations %>%
+  group_by(Station.Name) %>%
+  summarise(Observation.Count = n(),
+            Min.Year = min(Year),
+            Max.Year = max(Year))
+
+Stations <- inner_join(Stations, Stations.Observations.Count, by = "Station.Name")
+
+rm(Stations.Observations.Count)
+
+```
+
+The National Centers for Environmental Information ("NCEI") divides Minnesota into 9 Climate Divisions^[1](https://www.ncdc.noaa.gov/monitoring-references/maps/us-climate-divisions.php)^, starting with Climate Division 1 in the northwest, and ending with Climate Division 9 in the southeast.
+
+
+Using the 'Import and Clean MRCC Datasets' R code^[2](https://github.com/caitlinrdavies/Springboard-capstone/blob/master/3.1.d%20Import%20and%20Clean%20MRCC%20Datasets.R)^, I have collected and cleaned `r nrow(Stations)` datasets from `r nrow(Stations)` random Climate Stations throughout Minnesota, listed below.
+
+Prior to import, some observations contained no data. Empty observations are removed with the 'Import and Clean MRCC Datasets' R code.
+
+### List of Climate Stations by Climate Division
+
+``` {r station_table}
+
+Stations %>%
+  select(Station.Name, County, Climate.Division, Latitude, Longitude, Elevation, Observation.Count) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+
+```
+
+### Visualizing Climate Stations by Climate Division
+
+Climate Stations collected for this report can be visualized by Latitude and Longitude (with Climate Division represented by color):
+
+```{r stations_graph1, fig.width = 10}
+
+ggplot(Stations, aes(x = Longitude, y = Latitude, label = Station.Name)) +
+  geom_point(size = 3) +
+  geom_label_repel(fill = Stations$Climate.Division, segment.color = '#000000', fontface = 'bold', color = 'white')
+
+```
+
+### Visualizing Climate Stations by Climate Division and Elevation
+
+And, with Elevation, the Climate Stations can be visualized in 3D:
+
+```{r, fig.width = 10}
+with(Stations, {s3d <- scatterplot3d(Longitude, Latitude, Elevation,
+                 color=Stations$Climate.Division, pch=19,
+                 type="h",
+                 xlab="Longitude",
+                 ylab="Latitude",
+                 zlab="Elevation")
+##   s3d.coords <- s3d$xyz.convert(Longitude, Latitude, Elevation)
+##   text(s3d.coords$x, s3d.coords$y,
+##         labels= Stations$Station.Name,
+##         cex=.75, pos = 4)
+})
+```
+
+As seen above, Climate Station 3 is at significantly lower elevation than the other Climate Stations. 
+
+----
+
+## Description of Datasets
+
+----
+
+The datasets collected from these climate stations comprise different timeframes:
+
+```{r station_years, , fig.width = 10, message = FALSE}
+
+ggplot(Stations, aes(Station.Name)) +
+  geom_point(aes(y = Stations$Min.Year, color = "blue")) +
+  geom_point(aes(y = Stations$Max.Year, color = "red")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(x = "", y = "", title = "Date Range of Collected Datasets") +
+  scale_color_manual(labels=c("First Year in Dataset", "Last Year in Dataset"), values = c("blue", "red")) +
+  theme(legend.position="top", legend.title=element_blank())
+
+```
+
+----
+
+## The Story of the Data
+
+----
+
+```{r create_max_temp}
+
+Max.Tempurature <- All_Stations %>%
+  select(Station.Name, Year, Month, Day, TMAX) %>%
+  group_by(Station.Name, Year) %>%
+  filter(min_rank(desc(TMAX)) <= 1) %>%
+  slice(which.max(TMAX)) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+Max.Tempurature$Day_of_Year <- day_in_year(Max.Tempurature$Month, Max.Tempurature$Day)
+
+```
+
+```{r cor_time_TMAX}
+
+Max.Tempurature %>%
+  group_by(Station.Name) %>%
+  summarise(Corr.Coeff = cor(Year, TMAX)) %>%
+  mutate(Strength = ifelse(Corr.Coeff <= -.3, "Strong Negative", 
+                    ifelse(Corr.Coeff > -.3 & Corr.Coeff < -0.05, "Weak Negative",
+                    ifelse(Corr.Coeff > -0.05 & Corr.Coeff < 0.05, "No Correlation", 
+                    ifelse(Corr.Coeff > 0.05 & Corr.Coeff < 0.3, "Weak Positive", "Strong Positive"))))) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE, position = "float_right") %>%
+  group_rows("Row 1", 1, 4) %>%
+  group_rows("Row 2", 5, 8) %>%
+  group_rows("Row 3", 9, 12) %>%
+  group_rows("Row 4", 13, 14)
+
+```
+
+From the data collected, two trends can be observed.
+
+### Highest Tempurature Over Time
+
+First, the highest tempurature of the year, on average, has a weak **negative** linear relationship with time (average correlation coefficiant of `r cor(Max.Tempurature$Year, Max.Tempurature$TMAX)`).
+
+In other words, for the locations and timeframes selected, the highest tempurature of the year has been decreasing or staying consistent over time.
+
+#### Anomalous Strong Negative Relationships
+
+AGASSIZ_REFUGE: This dataset shows a steep non-linear drop starting in 2007 (as visualized in the graph below). From 1958 to 2007, AGASSIZ_REFUGE consistently collected data; after that period, some years are missing. This missing data could explain the strong negative relationship observed at that climate station.
+
+ARTICHOKE LAKE 1 E: No visible/known differences in this data can explain the strong negative relationship between time and maximum tempurature at this Climate Station.
+
+#### Datasets to Remove or Replace
+
+Additionally, the AMBOY dataset has a large gap from 1906 to 1992, leading to a large confidence band between those dates. This dataset is problematic for that reason, and both the AGASSIZ_REFUGE and the AMBOY datasets should possibly be replaced with more consistently collected data.
+
+```{r max_combined_temp_trend, fig.width = 10}
+
+ggplot(Max.Tempurature, aes(x = Year, y = TMAX, color = Station.Name)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  labs(title = "Yearly Maximum Tempurature Over Time") +
+  theme(legend.position='none')
+
+```
+
+```{r create_min_temp}
+
+Min.Tempurature <- All_Stations %>%
+  select(Station.Name, Year, Month, Day, TMIN) %>%
+  group_by(Station.Name, Year) %>%
+  slice(which.min(TMIN)) %>%
+  semi_join(complete.years, by = c("Station.Name", "Year"))
+
+Min.Tempurature$Day_of_Year <- day_in_year(Min.Tempurature$Month, Min.Tempurature$Day)
+
+Min.Tempurature$Day_of_Year <- group_cold(Min.Tempurature$Day_of_Year)
+
+```
+
+```{r cor_time_TMIN}
+
+Min.Tempurature %>%
+  group_by(Station.Name) %>%
+  summarise(Corr.Coeff = cor(Year, TMIN)) %>%
+  mutate(Strength = ifelse(Corr.Coeff <= -.3, "Strong Negative", 
+                    ifelse(Corr.Coeff > -.3 & Corr.Coeff < -0.05, "Weak Negative",
+                    ifelse(Corr.Coeff > -0.05 & Corr.Coeff < 0.05, "No Correlation", 
+                    ifelse(Corr.Coeff > 0.05 & Corr.Coeff < 0.3, "Weak Positive", "Strong Positive"))))) %>%
+  kable("html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE, position = "float_right") %>%
+  group_rows("Row 1", 1, 4) %>%
+  group_rows("Row 2", 5, 8) %>%
+  group_rows("Row 3", 9, 12) %>%
+  group_rows("Row 4", 13, 14)
+
+```
+
+### Lowest Tempurature Over Time
+
+Second, the lowest tempurature of the year, on average, has a weak to strong **positive** linear relationship with time (average correlation coefficiant of `r cor(Min.Tempurature$Year, Min.Tempurature$TMIN)`). 
+
+In other words, for most locations and timeframes selected, the lowest tempurature of the year has been rising over time.
+
+#### Anomalous No Correlation Relationships
+
+BEMIDJI MUNICIPAL AP: This Climate Station sits at the highest elevation of all the datasets collected, which might be why there is no correlation between time and minimum tempurature. Higher elevations would be less affected by rising tempuratures. 
+
+### What Does It Mean?
+
+These two trends - a relatively consistent highest tempurature over time, with a relatively upward trending lowest tempurature over time, indicate that climate change is affecting winter more than summer in the state of Minnesota.
+
+```{r min_combined_temp_trend, fig.width = 10}
+
+ggplot(Min.Tempurature, aes(x = Year, y = TMIN, color = Station.Name)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  labs(title = "Yearly Minimum Tempurature Over Time") +
+  theme(legend.position='none')
+
+```
+
+```{r max_year_trend, fig.width = 10, eval = FALSE}
+
+ggplot(Min.Tempurature, aes(x = Year, y = Day_of_Year, color = TMIN)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  theme(legend.position='none')
+
+```
+
+```{r min_year, fig.width = 10, eval = FALSE}
+
+ggplot(Min.Tempurature, aes(x = Year, y = Day_of_Year, color = Station.Name)) +
+  geom_point() +
+  geom_smooth(method = "loess", color = "black") +
+  facet_wrap("Station.Name") +
+  theme(legend.position='none')
+
+```
