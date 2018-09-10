@@ -11,7 +11,7 @@ library("NbClust")
 Stations.cluster <- Stations[, c(4:6)]
 Stations.cluster <- scale(Stations.cluster)
 
-# Why does this method suggest 3 clusters? 
+# How many clusters does this method suggest? It could be 3 or 4? 
 
 wssplot <- function(data, nc = 8, seed = 1234){
   wss <- (nrow(data) - 1)*sum(apply(data, 2, var))
