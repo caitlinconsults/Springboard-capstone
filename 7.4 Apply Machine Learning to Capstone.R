@@ -8,6 +8,7 @@ install.packages(c("cluster", "NbClust"))
 library("cluster")
 library("NbClust")
 library("dplyr")
+library("tidyr")
 library("ggmap")
 
 # Scale data for clustering
@@ -55,15 +56,48 @@ MN_Map <- get_map("Minnesota", zoom = 6)
 ggmap(MN_Map) + 
   geom_point(aes(x = Longitude, y = Latitude, color = Cluster), data = Stations)
 
-### Predicting future winter tempuratures using Linear Regression
+### Predicting lyme disease infection using rising winter tempuratures
 
-TMIN.linear <- subset(Min.Tempurature, select = c("Year", "TMIN"))
+lyme_infections <- read.csv("ld-Case-Counts-by-County-00-16.csv")
+
+lyme_infections <- subset(lyme_infections, lyme_infections$Stname == "Minnesota")
+
+lyme_infections$STCODE <- NULL
+
+lyme_infections$CTYCODE <- NULL
+
+lyme_infections$Stname <- NULL
+
+names(lyme_infections) = gsub(pattern = "Cases", replacement = "", x = names(lyme_infections))
+
+lyme_infections$Ctyname = gsub(" County", "", lyme_infections$Ctyname)
+
+lyme_infections <- lyme_infections %>% 
+  gather(Year, Infections, 2:18)
+
+lyme_infections <- lyme_infections %>% 
+  mutate_at(vars(Ctyname), .funs = toupper)
+
+colnames(lyme_infections)[1] <- "County"
+
+Min.Tempurature <- merge(Min.Tempurature, Stations, by = "Station.Name")
+
+Min.Tempurature[, 12:14] <- NULL
+
+Min.Tempurature <- merge(Min.Tempurature, lyme_infections, by = c("County", "Year"))
+
+TMIN.linear <- subset(Min.Tempurature, select = 
+                        c("TMIN", "Year", "Month", "Cluster", "Climate.Division", 
+                          "Latitude", "Longitude", "Elevation", "Infections"))
+
+TMIN.linear[1:9] <- sapply(TMIN.linear[1:9], as.numeric)
 
 cor(TMIN.linear)
 
 plot(TMIN.linear)
 
-TMIN.model <- lm(TMIN ~ Station.Name + Year, data = Min.Tempurature)
+TMIN.model <- lm(Infections ~ TMIN + Year + Month + Latitude + 
+                   Elevation + Cluster, data = TMIN.linear)
 
 summary(TMIN.model)
 
