@@ -56,7 +56,7 @@ MN_Map <- get_map("Minnesota", zoom = 6)
 ggmap(MN_Map) + 
   geom_point(aes(x = Longitude, y = Latitude, color = Cluster), data = Stations)
 
-### Predicting lyme disease infection using rising winter tempuratures
+### Predicting lyme disease infection
 
 lyme_infections <- read.csv("ld-Case-Counts-by-County-00-16.csv")
 
@@ -80,27 +80,25 @@ lyme_infections <- lyme_infections %>%
 
 colnames(lyme_infections)[1] <- "County"
 
-Min.Tempurature <- merge(Min.Tempurature, Stations, by = "Station.Name")
+Max.Stations <- merge(Max.Tempurature, Stations, by = "Station.Name")
 
-Min.Tempurature[, 12:14] <- NULL
+Max.Stations[, 12:14] <- NULL
 
-Min.Tempurature <- merge(Min.Tempurature, lyme_infections, by = c("County", "Year"))
+Max.Stations <- merge(Max.Stations, lyme_infections, by = c("County", "Year"))
 
-TMIN.linear <- subset(Min.Tempurature, select = 
-                        c("TMIN", "Year", "Month", "Cluster", "Climate.Division", 
+Infections.linear <- subset(Max.Stations, select = 
+                        c("TMAX", "Year", "Month", "Cluster", "Climate.Division", 
                           "Latitude", "Longitude", "Elevation", "Infections"))
 
-TMIN.linear[1:9] <- sapply(TMIN.linear[1:9], as.numeric)
+Infections.linear[1:9] <- sapply(Infections.linear[1:9], as.numeric)
 
 cor(TMIN.linear)
 
-plot(TMIN.linear)
+Infections.model <- lm(Infections ~ TMAX + Year + Month + Latitude + Longitude + 
+                   Elevation + Cluster, data = Infections.linear)
 
-TMIN.model <- lm(Infections ~ TMIN + Year + Month + Latitude + 
-                   Elevation + Cluster, data = TMIN.linear)
+summary(Infections.model)
 
-summary(TMIN.model)
+confint(Infections.model)
 
-confint(TMIN.model)
-
-plot(TMIN.model, which = c(1, 2))
+plot(Infections.model, which = c(1, 2))
